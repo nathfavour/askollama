@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Added by Autocommiter: ensure *.env*
+*.env*
+# Added by Autocommiter: ensure .env*
+.env*
+# Added by Autocommiter: ensure docx/
+docx/
+# Added by Autocommiter: ensure .docx/
+.docx/
