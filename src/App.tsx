@@ -1,21 +1,31 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import "./App.css";
+import Overlay from "./Overlay";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [ocrText, setOcrText] = useState<string | null>(null);
+  const [explanation, setExplanation] = useState<string | null>(null);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  useEffect(() => {
+    const unlistenOcr = listen<string>("screenshot:ocr", (e) => {
+      setOcrText(e.payload as string);
+    });
+    const unlistenExp = listen<string>("screenshot:explanation", (e) => {
+      setExplanation(e.payload as string);
+    });
+
+    return () => {
+      unlistenOcr.then((u) => u());
+      unlistenExp.then((u) => u());
+    };
+  }, []);
 
   return (
     <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
+      <h1>askollama</h1>
+      <p>Running in background. Take a screenshot to see results.</p>
       <div className="row">
         <a href="https://vitejs.dev" target="_blank">
           <img src="/vite.svg" className="logo vite" alt="Vite logo" />
@@ -27,23 +37,8 @@ function App() {
           <img src={reactLogo} className="logo react" alt="React logo" />
         </a>
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+      <Overlay ocrText={ocrText} explanation={explanation} />
     </main>
   );
 }
