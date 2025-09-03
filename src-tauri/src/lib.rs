@@ -33,6 +33,48 @@ fn set_settings(state: tauri::State<'_, AppState>, s: Settings) {
     *state.settings.lock().unwrap() = s;
 }
 
+// Persist settings to disk in the app data dir
+fn settings_path() -> Option<PathBuf> {
+    tauri::api::path::app_config_dir().map(|p| p.join("askollama_settings.json"))
+}
+
+#[tauri::command]
+fn save_settings_to_disk(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let s = state.settings.lock().unwrap().clone();
+    let p = settings_path().ok_or_else(|| "failed to get config dir".to_string())?;
+    if let Some(parent) = p.parent() { std::fs::create_dir_all(parent).ok(); }
+    serde_json::to_string_pretty(&s)
+        .map_err(|e| e.to_string())
+        .and_then(|body| std::fs::write(&p, body).map_err(|e| e.to_string()))
+}
+
+#[tauri::command]
+fn load_settings_from_disk(state: tauri::State<'_, AppState>) -> Result<Settings, String> {
+    let p = settings_path().ok_or_else(|| "failed to get config dir".to_string())?;
+    let raw = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
+    let s: Settings = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    *state.settings.lock().unwrap() = s.clone();
+    Ok(s)
+}
+
+#[tauri::command]
+fn enable_autostart() -> Result<String, String> {
+    let exec = std::env::current_exe().map_err(|e| e.to_string())?;
+    let autostart_dir = dirs::home_dir().ok_or_else(|| "no home dir".to_string())?.join(".config/autostart");
+    std::fs::create_dir_all(&autostart_dir).map_err(|e| e.to_string())?;
+    let desktop = autostart_dir.join("askollama.desktop");
+    let contents = format!("[Desktop Entry]\nType=Application\nName=askollama\nExec={}\nX-GNOME-Autostart-enabled=true\n", exec.display());
+    std::fs::write(&desktop, contents).map_err(|e| e.to_string())?;
+    Ok(desktop.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn disable_autostart() -> Result<(), String> {
+    let desktop = dirs::home_dir().ok_or_else(|| "no home dir".to_string())?.join(".config/autostart/askollama.desktop");
+    if desktop.exists() { std::fs::remove_file(&desktop).map_err(|e| e.to_string())?; }
+    Ok(())
+}
+
 #[derive(Clone)]
 struct AppState {
     settings: Arc<Mutex<Settings>>,
@@ -157,6 +199,12 @@ async fn call_ollama(ocr_text: &str) -> Result<String, String> {
     Ok(text)
 }
 
+#[tauri::command]
+async fn explain_with_prompt(ocr_text: &str, prompt: &str) -> Result<String, String> {
+    let combined = format!("{}\n\nUser prompt: {}", ocr_text, prompt);
+    call_ollama(&combined).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let settings = Arc::new(Mutex::new(Settings::default()));
@@ -165,7 +213,7 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(app_state)
-        .invoke_handler(tauri::generate_handler![get_settings, set_settings]);
+        .invoke_handler(tauri::generate_handler![get_settings, set_settings, save_settings_to_disk, load_settings_from_disk, explain_with_prompt, enable_autostart, disable_autostart]);
 
     let app = builder.build(tauri::generate_context!()).expect("error while building tauri app");
 

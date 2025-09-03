@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/tauri";
 
 type Props = {
   ocrText: string | null;
@@ -27,7 +28,9 @@ export default function Overlay({ ocrText, explanation }: Props) {
       <div className="overlay" onClick={(e) => e.stopPropagation()}>
         <div className="overlay-header">
           <h3>Screenshot assistant</h3>
-          <button onClick={() => setVisible(false)}>×</button>
+          <div>
+            <button onClick={() => setVisible(false)}>×</button>
+          </div>
         </div>
         <div className="overlay-body">
           <div className="ocr-block">
@@ -44,15 +47,72 @@ export default function Overlay({ ocrText, explanation }: Props) {
               onChange={(e) => setPrompt(e.target.value)}
             />
             <div className="chat-actions">
-              <button
-                onClick={() => {
-                  // For now just append prompt locally; will wire to backend later
-                  setReply((r) => (r ? r + "\n\nUser prompt: " + prompt : "User prompt: " + prompt));
-                }}
-              >
-                Send
-              </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const res: string = await invoke("explain_with_prompt", { ocr_text: ocrText ?? "", prompt });
+                      setReply(res);
+                    } catch (e) {
+                      setReply("Error sending prompt: " + String(e));
+                    }
+                  }}
+                >
+                  Send
+                </button>
             </div>
+              <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                <button
+                  onClick={async () => {
+                    try {
+                      await invoke("save_settings_to_disk");
+                      setReply((r) => (r ? r + "\n\nSettings saved." : "Settings saved."));
+                    } catch (e) {
+                      setReply("Failed to save settings: " + String(e));
+                    }
+                  }}
+                >
+                  Save settings
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const s: any = await invoke("load_settings_from_disk");
+                      setReply(JSON.stringify(s, null, 2));
+                    } catch (e) {
+                      setReply("Failed to load settings: " + String(e));
+                    }
+                  }}
+                >
+                  Load settings
+                </button>
+              </div>
+
+              <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                <button
+                  onClick={async () => {
+                    try {
+                      const path: string = await invoke("enable_autostart");
+                      setReply("Autostart .desktop written: " + path);
+                    } catch (e) {
+                      setReply("Failed to enable autostart: " + String(e));
+                    }
+                  }}
+                >
+                  Enable autostart
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await invoke("disable_autostart");
+                      setReply("Autostart disabled");
+                    } catch (e) {
+                      setReply("Failed to disable autostart: " + String(e));
+                    }
+                  }}
+                >
+                  Disable autostart
+                </button>
+              </div>
           </div>
         </div>
       </div>
