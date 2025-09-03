@@ -30,9 +30,6 @@ notify = { version = "6", features = ["recommended"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 reqwest = { version = "0.11", features = ["json", "blocking", "rustls-tls"] }
 
-# For serializing/deserializing requests/responses
-serde = { version = "1", features = ["derive"] }
-
 # For subprocess to call tesseract
 which = "4"
 
